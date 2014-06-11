@@ -8,19 +8,23 @@
 
 #import "ViewController.h"
 
-@interface ViewController (){
+@interface ViewController () <UIScrollViewDelegate>
+{
     BOOL        arr_statusOfBtns[5];
     BOOL        arr_trackBtns[5];
 }
-@property (nonatomic, strong)       NSMutableArray          *arr_ctrlBtnArray;
-@property (nonatomic, strong)       NSMutableArray          *arr_circleViewArray;
-@property (nonatomic, strong)       NSMutableArray          *arr_labelArray;
-@property (nonatomic, strong)       NSMutableArray          *arr_colorArray;
-@property (nonatomic, strong)       NSArray                 *arr_overLayImage;
-@property (nonatomic, strong)       NSArray                 *arr_overLayNames;
+@property (nonatomic, strong)           NSMutableArray          *arr_ctrlBtnArray;
+@property (nonatomic, strong)           NSMutableArray          *arr_circleViewArray;
+@property (nonatomic, strong)           NSMutableArray          *arr_labelArray;
+@property (nonatomic, strong)           NSMutableArray          *arr_colorArray;
+@property (nonatomic, strong)           NSArray                 *arr_overLayImage;
+@property (nonatomic, strong)           NSArray                 *arr_overLayNames;
 
-@property (nonatomic, strong)       UIView                  *uiv_buttonContainer;
-@property (nonatomic, strong)       UIImageView             *uiiv_baseMap;
+@property (nonatomic, strong)           UIView                  *uiv_buttonContainer;
+@property (nonatomic, strong)           UIImageView             *uiiv_baseMap;
+
+@property (nonatomic, strong, readonly) UIScrollView            *scrollView;
+@property (nonatomic, strong)           UIView                  *uiv_windowComparisonContainer;
 @end
 
 @implementation ViewController
@@ -54,12 +58,25 @@ NSLog(@"the size is %@",[self.view description]);
 }
 
 -(void)initVC {
+    //Init ScrollView
+    _scrollView = [[UIScrollView alloc] initWithFrame:CGRectMake(0.0, 46.0, self.view.bounds.size.width, 554)];
+    _scrollView.backgroundColor = [UIColor whiteColor];
+    _scrollView.delegate = self;
+    [self.view addSubview: _scrollView];
+    
     //Init ImageView
     _uiiv_baseMap = [[UIImageView alloc] init];
     _uiiv_baseMap.frame = CGRectMake(0.0, 46, self.view.bounds.size.width, 554);
     _uiiv_baseMap.image = [UIImage imageNamed:@"ABOUT_SECTION_00_BASE.png"];
     _uiiv_baseMap.contentMode = UIViewContentModeScaleAspectFit;
-    [self.view addSubview: _uiiv_baseMap];
+    _uiiv_baseMap.userInteractionEnabled = YES;
+    
+    _uiv_windowComparisonContainer = [[UIView alloc] initWithFrame:_uiiv_baseMap.bounds];
+    [_uiv_windowComparisonContainer addSubview:_uiiv_baseMap];
+    
+    _scrollView.contentSize = _uiv_windowComparisonContainer.frame.size;
+    [_scrollView addSubview:_uiv_windowComparisonContainer];
+    [self zoomableScrollview:self withImage:_uiiv_baseMap];
     
     //Init button container
     if (!_uiv_buttonContainer) {
@@ -109,6 +126,8 @@ NSLog(@"the size is %@",[self.view description]);
     }
     
     [self initBtnColors];
+    [self unlockZoom];
+//    [self lockZoom];
 }
 
 -(void)initBtnColors {
@@ -177,11 +196,110 @@ NSLog(@"the size is %@",[self.view description]);
             UIImageView *uiiv_overLay = [[UIImageView alloc] init];
             uiiv_overLay.frame = _uiiv_baseMap.bounds;
             uiiv_overLay.image = [UIImage imageNamed:[_arr_overLayImage objectAtIndex:i]];
+            uiiv_overLay.tag = 100;
             uiiv_overLay.contentMode = UIViewContentModeScaleAspectFit;
             [_uiiv_baseMap addSubview: uiiv_overLay];
         }
     }
     
+}
+#pragma mark - Set Zooming Scroll View
+-(void)unlockZoom {
+    _scrollView.maximumZoomScale = 4.0;
+    _scrollView.minimumZoomScale = 1.0;
+}
+
+-(void)lockZoom {
+    _scrollView.maximumZoomScale = 1.0;
+    _scrollView.minimumZoomScale = 1.0;
+}
+
+-(void)resetScroll {
+    _scrollView.zoomScale = 1.0;
+}
+
+-(void)zoomableScrollview:(id)sender withImage:(UIImageView*)thisImage {
+    
+	self.scrollView.tag = 11000;
+	//Pinch Zoom Stuff
+	_scrollView.maximumZoomScale = 4.0;
+	_scrollView.minimumZoomScale = 1.0;
+	_scrollView.clipsToBounds = YES;
+	_scrollView.scrollEnabled = YES;
+    
+	
+	UITapGestureRecognizer *doubleTap = [[UITapGestureRecognizer alloc] initWithTarget:self action:@selector(zoomMyPlan:)];
+    
+	[doubleTap setDelaysTouchesBegan : YES];
+    [doubleTap setNumberOfTapsRequired:2];
+	[doubleTap setDelegate:self];
+	[_scrollView addGestureRecognizer:doubleTap];
+}
+
+-(void)zoomMyPlan:(UITapGestureRecognizer *)sender {
+	
+	// 1 determine which to zoom
+	UIScrollView *tmp;
+	
+	tmp = _scrollView;
+	
+	CGPoint pointInView = [sender locationInView:tmp];
+	
+	// 2
+	CGFloat newZoomScale = tmp.zoomScale * 2.0f;
+	newZoomScale = MIN(newZoomScale, tmp.maximumZoomScale);
+	
+	// 3
+	CGSize scrollViewSize = tmp.bounds.size;
+	
+	CGFloat w = scrollViewSize.width / newZoomScale;
+	CGFloat h = scrollViewSize.height / newZoomScale;
+	CGFloat x = pointInView.x - (w / 2.0f);
+	CGFloat y = pointInView.y - (h / 2.0f);
+	CGRect rectToZoomTo = CGRectMake(x, y, w, h);
+	// 4
+	
+    if (tmp.zoomScale > 1.9) {
+        [tmp setZoomScale: 1.0 animated:YES];
+		
+    } else if (tmp.zoomScale < 2) {
+		[tmp zoomToRect:rectToZoomTo animated:YES];
+		
+    }
+}
+-(UIView *)viewForZoomingInScrollView:(UIScrollView *)scrollView {
+	//return uiiv_contentBG;
+	return _uiv_windowComparisonContainer;
+}
+
+- (void)scrollViewDidZoom:(UIScrollView *)scrollView
+{
+    UIView *subView = [scrollView.subviews objectAtIndex:0];
+	
+    CGFloat offsetX = (scrollView.bounds.size.width > scrollView.contentSize.width)?
+    (scrollView.bounds.size.width - scrollView.contentSize.width) * 0.5 : 0.0;
+	
+    CGFloat offsetY = (scrollView.bounds.size.height > scrollView.contentSize.height)?
+    (scrollView.bounds.size.height - scrollView.contentSize.height) * 0.5 : 0.0;
+	
+    subView.center = CGPointMake(scrollView.contentSize.width * 0.5 + offsetX,
+                                 scrollView.contentSize.height * 0.5 + offsetY);
+}
+
+-(void)scrollViewDidScroll:(UIScrollView *)scrollView
+{
+    for (UIView *dropPinView in _uiiv_baseMap.subviews) {
+        if (dropPinView.tag != 100) {
+            CGRect oldFrame = dropPinView.frame;
+            // 0.5 means the anchor is centered on the x axis. 1 means the anchor is at the bottom of the view. If you comment out this line, the pin's center will stay where it is regardless of how much you zoom. I have it so that the bottom of the pin stays fixed. This should help user RomeoF.
+            //[dropPinView.layer setAnchorPoint:CGPointMake(0.5, 1)];
+            [dropPinView.layer setAnchorPoint:CGPointMake(0.5, 0.5)];
+            dropPinView.frame = oldFrame;
+            // When you zoom in on scrollView, it gets a larger zoom scale value.
+            // You transform the pin by scaling it by the inverse of this value.
+            dropPinView.transform = CGAffineTransformMakeScale(1.0/_scrollView.zoomScale, 1.0/_scrollView.zoomScale);
+        }
+    }
 }
 
 - (void)didReceiveMemoryWarning
